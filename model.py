@@ -13,21 +13,27 @@ from torchvision.io import read_image
 from PIL import Image
 from torchvision.models.resnet import resnet18 as _resnet18
 
-class MocoNet(nn.Module):
-    def __init__(self):
+class MocoNetEncoder(nn.Module):
+    def __init__(self,  repo_or_dir='pytorch/vision:v0.10.0', model='wide_resnet50_2', pretrain=True, out_features=128):
+        self.encoder = torch.hub.load('pytorch/vision:v0.10.0', 'wide_resnet50_2', pretrained=True)  # todo check if to use pretrain
+        self.encoder.fc = torch.nn.Linear(in_features=2048, out_features=out_features)
 
-    def forwe
+    def forward(self, x):
+        x = self.encoder(x)
+        return x
 
 class LitMoCo(LightningModule):
     def __init__(self):
         super().__init__()
-        self.encoder = torch.hub.load('pytorch/vision:v0.10.0', 'wide_resnet50_2', pretrained=True)  # todo check if to use pretrain
-        self.encoder.fc = torch.nn.Linear(in_features=2048, out_features=128)
-        self.encoder_momentum = torch.hub.load('pytorch/vision:v0.10.0', 'wide_resnet50_2', pretrained=False)
-        self.encoder_momentum.fc = torch.nn.Linear(in_features=2048, out_features=128)
-        self.end
+        self.encoder = MocoNetEncoder('pytorch/vision:v0.10.0', 'wide_resnet50_2', pretrained=True, out_features=128)
+        self.encoder_momentum = MocoNetEncoder('pytorch/vision:v0.10.0', 'wide_resnet50_2', pretrained=True, out_features=128)
+
     def forward(self, x):
-        x = self.model(x)
+        x = self.encoder(x)
+        return x
+
+    def forward_momentum(self, x):
+        x = self.encoder_momentum(x)
         return x
 
     def training_step(self, batch, batch_idx):
@@ -60,7 +66,6 @@ class LitMoCo(LightningModule):
         # data
         imagenette2_val = Imagenette2(dir_path='./datasets/imagenette2-160', transform=transform, mode='val')
         return DataLoader(imagenette2_val, batch_size=64)
-
 
 class Imagenette2(Dataset):
     def __init__(self, dir_path, mode, transform=None, target_transform=None):
