@@ -14,8 +14,9 @@ from PIL import Image
 from torchvision.models.resnet import resnet18 as _resnet18
 
 class MocoNetEncoder(nn.Module):
-    def __init__(self,  repo_or_dir='pytorch/vision:v0.10.0', model='wide_resnet50_2', pretrain=True, out_features=128):
-        self.encoder = torch.hub.load('pytorch/vision:v0.10.0', 'wide_resnet50_2', pretrained=True)  # todo check if to use pretrain
+    def __init__(self,  repo_or_dir='pytorch/vision:v0.10.0', model='wide_resnet50_2', pretrained=True, out_features=128):
+        super().__init__()
+        self.encoder = torch.hub.load(repo_or_dir=repo_or_dir, model=model, pretrained=pretrained)  # todo check if to use pretrain
         self.encoder.fc = torch.nn.Linear(in_features=2048, out_features=out_features)
 
     def forward(self, x):
@@ -23,10 +24,17 @@ class MocoNetEncoder(nn.Module):
         return x
 
 class LitMoCo(LightningModule):
-    def __init__(self):
+    def __init__(self, channels=128, queue_size=256, temperature=0.1, momentum=0.9):
         super().__init__()
-        self.encoder = MocoNetEncoder('pytorch/vision:v0.10.0', 'wide_resnet50_2', pretrained=True, out_features=128)
-        self.encoder_momentum = MocoNetEncoder('pytorch/vision:v0.10.0', 'wide_resnet50_2', pretrained=True, out_features=128)
+        self.C = channels
+        self.queue_size = queue_size
+        self.temperature = temperature
+        self.momentum = momentum
+        self.encoder = MocoNetEncoder('pytorch/vision:v0.10.0', 'wide_resnet50_2', pretrained=True, out_features=self.C)
+        self.encoder_momentum = MocoNetEncoder('pytorch/vision:v0.10.0', 'wide_resnet50_2', pretrained=False, out_features=self.C)
+        self.queue = torch.zeros(self.C, self.queue_size, device=self.device)
+        self.loss_func = torch.nn.CrossEntropyLoss()
+        self.cur_dictionary_ind = 0
 
     def forward(self, x):
         x = self.encoder(x)
@@ -37,9 +45,48 @@ class LitMoCo(LightningModule):
         return x
 
     def training_step(self, batch, batch_idx):
-        x, y = batch
-        logits = self(x)
-        loss = F.nll_loss(logits, y)
+        N = batch[0].shape[0]
+        x_q, x_k, y = batch
+
+        print(f'{x_k.shape = }')
+        # momentum update: key network
+        for (name_encoder, W_encoder), (name_encoder_momentum, W_encoder_momentum) in zip(self.encoder.named_parameters(), self.encoder_momentum.named_parameters()):
+            if 'weight' in name_encoder:
+                W_encoder_momentum = self.momentum * W_encoder_momentum + (1 - self.momentum) * W_encoder  # todo check the momentom is on the rigth side
+
+
+        q = self.forward(x_q)
+        k = self.forward_momentum(x_k)
+        k = k.detach()
+
+        # positive logits: Nx1
+        l_pos = torch.bmm(q.view(N, 1, self.C), k.view(N, self.C, 1)).squeeze(-1)
+
+        # negative logits: NxK
+        l_neg = torch.mm(q.view(N, self.C), self.queue.clone().to(self.device))  # todo check if there is an alternative to clone
+
+        # logits: Nx(1+K)
+        logits = torch.cat([l_pos, l_neg], dim=1)
+
+        # contrastive loss, Eqn. (1)
+        labels = torch.zeros(N, dtype=torch.long, device=self.device)  # positives are the 0-th
+        loss = self.loss_func(logits/self.temperature, labels)
+
+        # update dictionary # todo add ability for queue to not be multiplication of the minibatch
+        start_ind = self.cur_dictionary_ind
+        end_ind = self.cur_dictionary_ind + k.T.shape[1]
+        if end_ind < self.queue.shape[1]:
+            self.queue[:, start_ind: end_ind] = k.T.detach()
+        else:
+            end_ind = self.queue.shape[1] - 1
+            end_len = end_ind - start_ind
+            remain_len = k.T.shape[1] - end_len
+            self.queue[:, start_ind: end_ind] = k.T.detach()[:, :end_len]
+            self.queue[:, :remain_len] = k.T.detach()[:, end_len:]
+
+        self.cur_dictionary_ind = (self.cur_dictionary_ind + k.T.shape[1]) % self.queue.shape[1]
+
+        self.log(name='loss', value=loss)
         return loss
 
     def configure_optimizers(self):
@@ -51,11 +98,12 @@ class LitMoCo(LightningModule):
                                         transforms.RandomSizedCrop(224),
                                         transforms.ColorJitter(brightness=0.05, contrast=0.05, saturation=0.05, hue=0.05), # TODO check unsupervised featuer learning via non parmetric instece discriminition for the values
                                         transforms.RandomHorizontalFlip(p=0.5),
-                                        transforms.RandomGrayscale(p=0.1),
+                                        transforms.RandomGrayscale(p=0.1),  # todo add this option later
                                         transforms.ToTensor(),
-                                        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])])  # TODO check
+                                        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+        ])  # TODO check
         # data
-        imagenette2_train = Imagenette2(dir_path='./datasets/imagenette2-160', transform=transform, mode='train')
+        imagenette2_train = Imagenette2_dataset(dir_path='./datasets/imagenette2-160', transform=transform, mode='train')
         return DataLoader(imagenette2_train, batch_size=64)
 
     def val_dataloader(self):
@@ -64,10 +112,10 @@ class LitMoCo(LightningModule):
                                         transforms.ToTensor(),
                                         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])])  # TODO check
         # data
-        imagenette2_val = Imagenette2(dir_path='./datasets/imagenette2-160', transform=transform, mode='val')
+        imagenette2_val = Imagenette2_dataset(dir_path='./datasets/imagenette2-160', transform=transform, mode='val')
         return DataLoader(imagenette2_val, batch_size=64)
 
-class Imagenette2(Dataset):
+class Imagenette2_dataset(Dataset):
     def __init__(self, dir_path, mode, transform=None, target_transform=None):
         self.mode = mode
         dir_path = os.path.join(dir_path, mode)
@@ -90,7 +138,7 @@ class Imagenette2(Dataset):
         img_path = self.images_paths[idx]
         img_label = self.images_labels[idx]
         # image = read_image(img_path) / 255
-        image = Image.open(img_path)
+        image_pil = Image.open(img_path).convert('RGB')
         # # tmp todo remove
         # # tmp
         # import matplotlib.pyplot as plt
@@ -98,8 +146,10 @@ class Imagenette2(Dataset):
         # plt.show()
         # # tmp
         # # tmp
+        # todo add if val or test then return just one image
         if self.transform:
-            image = self.transform(image)
+            image_q = self.transform(image_pil)
+            image_k = self.transform(image_pil)
         if self.target_transform:
             img_label = self.target_transform(img_label)
-        return image, img_label
+        return image_q, image_k, img_label
