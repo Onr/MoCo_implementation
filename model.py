@@ -24,7 +24,7 @@ class MocoNetEncoder(nn.Module):
         return x
 
 class LitMoCo(LightningModule):
-    def __init__(self, channels=128, queue_size=256, temperature=0.1, momentum=0.9):
+    def __init__(self, channels=128, queue_size=256, temperature=0.1, momentum=0.999):
         super().__init__()
         self.C = channels
         self.queue_size = queue_size
@@ -94,14 +94,14 @@ class LitMoCo(LightningModule):
 
     def train_dataloader(self):
         # transforms
-        transform = transforms.Compose([# transforms.Resize(300),
-                                        transforms.RandomSizedCrop(224),
-                                        transforms.ColorJitter(brightness=0.05, contrast=0.05, saturation=0.05, hue=0.05), # TODO check unsupervised featuer learning via non parmetric instece discriminition for the values
+        transform = transforms.Compose([transforms.RandomSizedCrop(224),
+                                        transforms.ColorJitter(brightness=0.4, contrast=0.4, saturation=0.4, hue=0.4),
                                         transforms.RandomHorizontalFlip(p=0.5),
-                                        transforms.RandomGrayscale(p=0.1),  # todo add this option later
+                                        transforms.RandomGrayscale(p=0.2),
+                                        transforms.GaussianBlur((35, 35)),  # TODO: check
                                         transforms.ToTensor(),
                                         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
-        ])  # TODO check
+                                        ])  # TODO check
         # data
         imagenette2_train = Imagenette2_dataset(dir_path='./datasets/imagenette2-160', transform=transform, mode='train')
         return DataLoader(imagenette2_train, batch_size=64)
@@ -110,7 +110,8 @@ class LitMoCo(LightningModule):
         # transforms
         transform = transforms.Compose([transforms.RandomSizedCrop(224),
                                         transforms.ToTensor(),
-                                        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])])  # TODO check
+                                        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+                                        ])
         # data
         imagenette2_val = Imagenette2_dataset(dir_path='./datasets/imagenette2-160', transform=transform, mode='val')
         return DataLoader(imagenette2_val, batch_size=64)
