@@ -12,6 +12,8 @@ from torch.utils.data import Dataset
 from torchvision.io import read_image
 from PIL import Image
 from torchvision.models.resnet import resnet18 as _resnet18
+from tqdm import tqdm
+import itertools
 
 class MocoNetEncoder(nn.Module):
     def __init__(self,  repo_or_dir='pytorch/vision:v0.10.0', model='wide_resnet50_2', pretrained=True, out_features=128):
@@ -22,10 +24,34 @@ class MocoNetEncoder(nn.Module):
     def forward(self, x):
         x = self.encoder(x)
         return x
+class LinearClassificationNet(LightningModule):
+    def __init__(self, in_features, out_features):
+        super().__init__()
+        self.fc = nn.Linear(in_features=in_features, out_features=out_features)
+
+
+    def forward(self, x):
+        out = self.fc(x)
+        return x
+
+    def training_step(self, batch, batch_idx):
+        outs = self(batch[0])
+        labels = batch[-1]
+        loss = nn.CrossEntropyLoss(outs, labels)
+
+    def train_dataloader(self):
+        pass
+
+    def configure_optimizers(self):
+        return Adam(self.parameters(), lr=1e-3)
+
+
+
 
 class LitMoCo(LightningModule):
-    def __init__(self, channels=128, queue_size=256, temperature=0.1, momentum=0.999):
+    def __init__(self, channels=128, queue_size=256, temperature=0.1, momentum=0.999, num_of_classes=10):
         super().__init__()
+        self.num_of_classes = num_of_classes
         self.C = channels
         self.queue_size = queue_size
         self.temperature = temperature
@@ -89,6 +115,40 @@ class LitMoCo(LightningModule):
         self.log(name='loss', value=loss)
         return loss
 
+    def on_validation_start(self):
+        dataloader = self.val_dataloader()
+        embedding_s = []
+        label_s = []
+
+        embedding_and_labels = [[self(cur_emb[0].cuda()), cur_emb[1]] for cur_emb in tqdm(dataloader, desc='getting embedings for linear classifier')]
+        embedding_s = torch.cat([curr[0] for curr in embedding_and_labels], dim=0)
+        label_s = list(itertools.chain.from_iterable([curr[1] for curr in embedding_and_labels]))
+        embedding_data = zip(embedding_s, label_s)
+        class EmbeddingDataset(Dataset):
+            def __init__(self, data):
+                super().__init__()
+                self.data = data
+            def __getitem__(self, idx):
+                return self.data[idx]
+            def __len__(self):
+                return len([1 for _ in self.data])
+        embedding_dataset = EmbeddingDataset(embedding_data)
+
+        embedding_dataloader = DataLoader(embedding_dataset)
+
+        net = LinearClassificationNet(in_features=self.C, out_features=self.num_of_classes)
+        trainer = Trainer()
+        trainer.fit(net, train_dataloader=embedding_dataloader)
+
+    def validation_step(self, batch, batch_idx):
+
+        print('tmp')
+        return
+
+    def validation_epoch_end(self, outputs):
+        print('tmp')
+        pass
+
     def configure_optimizers(self):
         return Adam(self.parameters(), lr=1e-3)
 
@@ -101,7 +161,7 @@ class LitMoCo(LightningModule):
                                         transforms.GaussianBlur((35, 35)),  # TODO: check
                                         transforms.ToTensor(),
                                         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
-                                        ])  # TODO check
+                                        ])
         # data
         imagenette2_train = Imagenette2_dataset(dir_path='./datasets/imagenette2-160', transform=transform, mode='train')
         return DataLoader(imagenette2_train, batch_size=64)
@@ -123,11 +183,23 @@ class Imagenette2_dataset(Dataset):
         class_dirs = [os.path.join(dir_path, cur_path) for cur_path in os.listdir(dir_path) if not cur_path.startswith('.')]
         self.images_paths = []
         self.images_labels = []
+        class_name_to_class_id = {
+            'chainsaw': 0,
+            'church': 1,
+            'dog': 2,
+            'fish': 3,
+            'gas_station': 4,
+            'golf': 5,
+            'parachute': 6,
+            'radio': 7,
+            'truck': 8,
+            'trumpet': 9,
+        }
         for cur_dir in class_dirs:
             curr_images_paths = [os.path.join(cur_dir, img_name) for img_name in os.listdir(cur_dir)]
             curr_images_labels = [cur_dir.split('/')[-1]] * len(curr_images_paths)
             self.images_paths += curr_images_paths
-            self.images_labels += curr_images_labels
+            self.images_labels += [class_name_to_class_id[cur_lab] for cur_lab in curr_images_labels]
 
         self.transform = transform
         self.target_transform = target_transform
@@ -138,19 +210,15 @@ class Imagenette2_dataset(Dataset):
     def __getitem__(self, idx):
         img_path = self.images_paths[idx]
         img_label = self.images_labels[idx]
-        # image = read_image(img_path) / 255
         image_pil = Image.open(img_path).convert('RGB')
-        # # tmp todo remove
-        # # tmp
-        # import matplotlib.pyplot as plt
-        # plt.imshow(torch.permute(image, (1, 2, 0)))
-        # plt.show()
-        # # tmp
-        # # tmp
-        # todo add if val or test then return just one image
+
         if self.transform:
             image_q = self.transform(image_pil)
-            image_k = self.transform(image_pil)
+            if self.mode is 'train':
+                image_k = self.transform(image_pil)
         if self.target_transform:
             img_label = self.target_transform(img_label)
-        return image_q, image_k, img_label
+        if self.mode is 'train':
+            return image_q, image_k, img_label
+        else:
+            return image_q, img_label

@@ -6,7 +6,7 @@ from pytorch_lightning.loggers import WandbLogger
 
 
 seed_everything(42, workers=True)
-wandb_logger = WandbLogger()
+wandb_logger = WandbLogger(entity='advanced-topics-in-deep-learning')
 
 # net = LitMoCo()
 x = torch.randn(1, 1, 28, 28)
