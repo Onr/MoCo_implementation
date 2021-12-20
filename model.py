@@ -176,7 +176,7 @@ class LitMoCo(LightningModule):
         embedding_data = list(zip(embedding_s, label_s))
         embedding_dataset = EmbeddingDataset(embedding_data)
         embedding_dataloader = DataLoader(embedding_dataset, batch_size=128)
-        self.linear_trainer = Trainer(max_epochs=10, gpus=self.config['gpus'])
+        self.linear_trainer = Trainer(max_epochs=100, gpus=self.config['gpus'])
         self.linear_trainer.fit(model=self.linear_net, train_dataloader=embedding_dataloader)
         test_results = self.linear_trainer.test(model=self.linear_net, test_dataloaders=embedding_dataloader)
         self.log('val_linear-acc', test_results[0]['test-acc'])
@@ -197,7 +197,7 @@ class LitMoCo(LightningModule):
         # data
         imagenette2_train = Imagenette2_dataset(dir_path=self.config['dataset'], transform=transform,
                                                 mode='train', do_all_dataset_in_memory=self.config['do_all_dataset_in_memory'])
-        return DataLoader(imagenette2_train, batch_size=self.config['batch_size'])
+        return DataLoader(imagenette2_train, batch_size=self.config['batch_size'], num_workers=self.config['num_workers'])
 
     def val_dataloader(self):
         # transforms
@@ -207,7 +207,7 @@ class LitMoCo(LightningModule):
                                         ])
         # data
         imagenette2_val = Imagenette2_dataset(dir_path=self.config['dataset'], transform=transform, mode='val', do_all_dataset_in_memory=self.config['do_all_dataset_in_memory'])
-        return DataLoader(imagenette2_val, batch_size=self.config['batch_size'])
+        return DataLoader(imagenette2_val, batch_size=self.config['batch_size'], num_workers=self.config['num_workers'])
 
 
 class Imagenette2_dataset(Dataset):

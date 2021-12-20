@@ -11,7 +11,7 @@ temperature: 0.2
 momentum: 0.999
 mlp_out_features: 128
 num_of_classes: 10
-batch_size: 16
+batch_size: 64
 dataset: ./datasets/imagenette2-160
 do_all_dataset_in_memory: True
-check_val_every_n_epoch: 10
+check_val_every_n_epoch: 1
