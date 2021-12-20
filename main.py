@@ -17,9 +17,8 @@ wandb_logger = WandbLogger(entity='advanced-topics-in-deep-learning')
 # net = LitMoCo()
 
 model = LitMoCo(config=config)
-trainer = Trainer(max_steps=config['max_steps'], gpus=config['gpus'], logger=wandb_logger)
+trainer = Trainer(max_steps=config['max_steps'], gpus=config['gpus'], logger=wandb_logger, check_val_every_n_epoch=config['check_val_every_n_epoch'])
 trainer.fit(model)
 
 x = torch.ones(1, 1, 28, 28)
 out = model(x)
-print(out.shape)

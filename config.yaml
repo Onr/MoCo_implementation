@@ -1,12 +1,17 @@
 entity: 'advanced-topics-in-deep-learning'
 seed: 42
 repo_or_dir: pytorch/vision:v0.10.0
-model: wide_resnet50_2
+model: resnet50 # wide_resnet50_2
 pretrained: False
 channels: 128
 max_steps: 100_000
 gpus: 1
 queue_size: 256
-temperature: 0.1
+temperature: 0.2
 momentum: 0.999
+mlp_out_features: 128
 num_of_classes: 10
+batch_size: 16
+dataset: ./datasets/imagenette2-160
+do_all_dataset_in_memory: True
+check_val_every_n_epoch: 10
