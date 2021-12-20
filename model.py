@@ -203,18 +203,25 @@ class Imagenette2_dataset(Dataset):
                       not cur_path.startswith('.')]
         self.images_paths = []
         self.images_labels = []
-        class_name_to_class_id = {
-            'chainsaw': 0,
-            'church': 1,
-            'dog': 2,
-            'fish': 3,
-            'gas_station': 4,
-            'golf': 5,
-            'parachute': 6,
-            'radio': 7,
-            'truck': 8,
-            'trumpet': 9,
-        }
+        # class_name_to_class_id = {
+        #     'chainsaw': 0,
+        #     'church': 1,
+        #     'dog': 2,
+        #     'fish': 3,
+        #     'gas_station': 4,
+        #     'golf': 5,
+        #     'parachute': 6,
+        #     'radio': 7,
+        #     'truck': 8,
+        #     'trumpet': 9,
+        # }
+        dataset_dir_tmp = [os.path.join(os.path.join('.', 'datasets'), path) for
+                           path in os.listdir(os.path.join('.', 'datasets')) if 'imagenette' in path][0]
+        class_dir = [path.split('/')[-1].split('\\')[-1] for path in os.listdir(os.path.join(dataset_dir_tmp, 'val'))]
+        class_name_to_class_id = {}
+        for idx, class_name in enumerate(class_dir):
+            class_name_to_class_id[class_name] = idx
+
         for cur_dir in class_dirs:
             curr_images_paths = [os.path.join(cur_dir, img_name) for img_name in os.listdir(cur_dir)]
             curr_images_labels = [cur_dir.split('/')[-1]] * len(curr_images_paths)
