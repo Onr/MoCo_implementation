@@ -1,0 +1,12 @@
+entity: 'advanced-topics-in-deep-learning'
+seed: 42
+repo_or_dir: pytorch/vision:v0.10.0
+model: wide_resnet50_2
+pretrained: False
+channels: 128
+max_steps: 100_000
+gpus: 1
+queue_size: 256
+temperature: 0.1
+momentum: 0.999
+num_of_classes: 10

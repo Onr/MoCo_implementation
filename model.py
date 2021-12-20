@@ -15,52 +15,84 @@ from torchvision.models.resnet import resnet18 as _resnet18
 from tqdm import tqdm
 import itertools
 
+
 class MocoNetEncoder(nn.Module):
-    def __init__(self,  repo_or_dir='pytorch/vision:v0.10.0', model='wide_resnet50_2', pretrained=True, out_features=128):
+    def __init__(self, config, repo_or_dir='pytorch/vision:v0.10.0', model='wide_resnet50_2', pretrained=True,
+                 out_features=128):
         super().__init__()
-        self.encoder = torch.hub.load(repo_or_dir=repo_or_dir, model=model, pretrained=pretrained)  # todo check if to use pretrain
-        self.encoder.fc = torch.nn.Linear(in_features=2048, out_features=out_features)
+        self.encoder = torch.hub.load(repo_or_dir=config['repo_or_dir'], model=config['model'],
+                                      pretrained=config['pretrained'])  # todo check if to use pretrain
+        self.encoder.fc = torch.nn.Linear(in_features=self.encoder.fc.in_features,
+                                          out_features=config['channels'])
 
     def forward(self, x):
         x = self.encoder(x)
         return x
+
+
 class LinearClassificationNet(LightningModule):
     def __init__(self, in_features, out_features):
         super().__init__()
         self.fc = nn.Linear(in_features=in_features, out_features=out_features)
-
+        self.norm = nn.Sigmoid()
+        # self.norm = nn.Softmax(dim=1)
 
     def forward(self, x):
-        out = self.fc(x)
-        return x
+        outs = self.fc(x)
+        preds = self.norm(outs)
+        return preds
 
     def training_step(self, batch, batch_idx):
-        outs = self(batch[0])
+        preds = self(batch[0])
         labels = batch[-1]
-        loss = nn.CrossEntropyLoss(outs, labels)
+        loss = nn.CrossEntropyLoss()(preds, labels)
+        return loss
 
-    def train_dataloader(self):
-        pass
+    def test_step(self, batch, batch_idx):
+        preds = self(batch[0])
+        labels = batch[-1]
+        loss = nn.CrossEntropyLoss()(preds, labels)
+        acc = (preds.argmax(dim=-1) == labels).float().mean()
+
+        self.log('test-acc', acc)
+        return loss
+
+    # def train_dataloader(self):
+    #     pass
 
     def configure_optimizers(self):
         return Adam(self.parameters(), lr=1e-3)
 
 
+class EmbeddingDataset(Dataset):
+    def __init__(self, data):
+        super().__init__()
+        self.data = data
+
+    def __getitem__(self, idx):
+        return self.data[idx]
+
+    def __len__(self):
+        # return len([1 for _ in self.data])
+        return len(self.data)
 
 
 class LitMoCo(LightningModule):
-    def __init__(self, channels=128, queue_size=256, temperature=0.1, momentum=0.999, num_of_classes=10):
+    def __init__(self, config):
         super().__init__()
-        self.num_of_classes = num_of_classes
-        self.C = channels
-        self.queue_size = queue_size
-        self.temperature = temperature
-        self.momentum = momentum
-        self.encoder = MocoNetEncoder('pytorch/vision:v0.10.0', 'wide_resnet50_2', pretrained=True, out_features=self.C)
-        self.encoder_momentum = MocoNetEncoder('pytorch/vision:v0.10.0', 'wide_resnet50_2', pretrained=False, out_features=self.C)
+        self.config = config
+        self.num_of_classes = config['num_of_classes']
+        self.C = config['channels']
+        self.queue_size = config['queue_size']
+        self.temperature = config['temperature']
+        self.momentum = config['momentum']
+        self.encoder = MocoNetEncoder(config=config)
+        self.encoder_momentum = MocoNetEncoder(config=config)
         self.queue = torch.zeros(self.C, self.queue_size, device=self.device)
         self.loss_func = torch.nn.CrossEntropyLoss()
         self.cur_dictionary_ind = 0
+        self.linear_trainer = Trainer(max_epochs=10)
+        self.linear_net = LinearClassificationNet(in_features=self.C, out_features=self.num_of_classes)
 
     def forward(self, x):
         x = self.encoder(x)
@@ -74,12 +106,12 @@ class LitMoCo(LightningModule):
         N = batch[0].shape[0]
         x_q, x_k, y = batch
 
-        print(f'{x_k.shape = }')
         # momentum update: key network
-        for (name_encoder, W_encoder), (name_encoder_momentum, W_encoder_momentum) in zip(self.encoder.named_parameters(), self.encoder_momentum.named_parameters()):
+        for (name_encoder, W_encoder), (name_encoder_momentum, W_encoder_momentum) in zip(
+                self.encoder.named_parameters(), self.encoder_momentum.named_parameters()):
             if 'weight' in name_encoder:
-                W_encoder_momentum = self.momentum * W_encoder_momentum + (1 - self.momentum) * W_encoder  # todo check the momentom is on the rigth side
-
+                W_encoder_momentum = self.momentum * W_encoder_momentum + (
+                            1 - self.momentum) * W_encoder  # todo check the momentom is on the rigth side
 
         q = self.forward(x_q)
         k = self.forward_momentum(x_k)
@@ -89,14 +121,15 @@ class LitMoCo(LightningModule):
         l_pos = torch.bmm(q.view(N, 1, self.C), k.view(N, self.C, 1)).squeeze(-1)
 
         # negative logits: NxK
-        l_neg = torch.mm(q.view(N, self.C), self.queue.clone().to(self.device))  # todo check if there is an alternative to clone
+        l_neg = torch.mm(q.view(N, self.C),
+                         self.queue.clone().to(self.device))  # todo check if there is an alternative to clone
 
         # logits: Nx(1+K)
         logits = torch.cat([l_pos, l_neg], dim=1)
 
         # contrastive loss, Eqn. (1)
         labels = torch.zeros(N, dtype=torch.long, device=self.device)  # positives are the 0-th
-        loss = self.loss_func(logits/self.temperature, labels)
+        loss = self.loss_func(logits / self.temperature, labels)
 
         # update dictionary # todo add ability for queue to not be multiplication of the minibatch
         start_ind = self.cur_dictionary_ind
@@ -115,44 +148,28 @@ class LitMoCo(LightningModule):
         self.log(name='loss', value=loss)
         return loss
 
-    def on_validation_start(self):
-        dataloader = self.val_dataloader()
-        embedding_s = []
-        label_s = []
-
-        embedding_and_labels = [[self(cur_emb[0].cuda()), cur_emb[1]] for cur_emb in tqdm(dataloader, desc='getting embedings for linear classifier')]
-        embedding_s = torch.cat([curr[0] for curr in embedding_and_labels], dim=0)
-        label_s = list(itertools.chain.from_iterable([curr[1] for curr in embedding_and_labels]))
-        embedding_data = zip(embedding_s, label_s)
-        class EmbeddingDataset(Dataset):
-            def __init__(self, data):
-                super().__init__()
-                self.data = data
-            def __getitem__(self, idx):
-                return self.data[idx]
-            def __len__(self):
-                return len([1 for _ in self.data])
-        embedding_dataset = EmbeddingDataset(embedding_data)
-
-        embedding_dataloader = DataLoader(embedding_dataset)
-
-        net = LinearClassificationNet(in_features=self.C, out_features=self.num_of_classes)
-        trainer = Trainer()
-        trainer.fit(net, train_dataloader=embedding_dataloader)
-
     def validation_step(self, batch, batch_idx):
-
-        print('tmp')
+        # todo maybe move get embedding to here
         return
 
     def validation_epoch_end(self, outputs):
-        print('tmp')
-        pass
+        embedding_and_labels = [[self(cur_emb[0].cuda()), cur_emb[1]] for cur_emb in
+                                tqdm(self.val_dataloader(), desc='getting embedings for linear classifier')]
+        embedding_s = torch.cat([curr[0] for curr in embedding_and_labels], dim=0)
+        label_s = list(itertools.chain.from_iterable([curr[1] for curr in embedding_and_labels]))
+        embedding_data = list(zip(embedding_s, label_s))
+        embedding_dataset = EmbeddingDataset(embedding_data)
+        embedding_dataloader = DataLoader(embedding_dataset)
+        self.linear_trainer = Trainer(max_epochs=5)
+        self.linear_trainer.fit(model=self.linear_net, train_dataloader=embedding_dataloader)
+        test_results = self.linear_trainer.test(model=self.linear_net, test_dataloaders=embedding_dataloader)
+        self.log('val_linear-acc', test_results[0]['test-acc'])
 
     def configure_optimizers(self):
         return Adam(self.parameters(), lr=1e-3)
 
     def train_dataloader(self):
+        self.config
         # transforms
         transform = transforms.Compose([transforms.RandomSizedCrop(224),
                                         transforms.ColorJitter(brightness=0.4, contrast=0.4, saturation=0.4, hue=0.4),
@@ -163,7 +180,8 @@ class LitMoCo(LightningModule):
                                         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
                                         ])
         # data
-        imagenette2_train = Imagenette2_dataset(dir_path='./datasets/imagenette2-160', transform=transform, mode='train')
+        imagenette2_train = Imagenette2_dataset(dir_path='./datasets/imagenette2-160', transform=transform,
+                                                mode='train')
         return DataLoader(imagenette2_train, batch_size=64)
 
     def val_dataloader(self):
@@ -176,11 +194,13 @@ class LitMoCo(LightningModule):
         imagenette2_val = Imagenette2_dataset(dir_path='./datasets/imagenette2-160', transform=transform, mode='val')
         return DataLoader(imagenette2_val, batch_size=64)
 
+
 class Imagenette2_dataset(Dataset):
     def __init__(self, dir_path, mode, transform=None, target_transform=None):
         self.mode = mode
         dir_path = os.path.join(dir_path, mode)
-        class_dirs = [os.path.join(dir_path, cur_path) for cur_path in os.listdir(dir_path) if not cur_path.startswith('.')]
+        class_dirs = [os.path.join(dir_path, cur_path) for cur_path in os.listdir(dir_path) if
+                      not cur_path.startswith('.')]
         self.images_paths = []
         self.images_labels = []
         class_name_to_class_id = {
@@ -214,11 +234,11 @@ class Imagenette2_dataset(Dataset):
 
         if self.transform:
             image_q = self.transform(image_pil)
-            if self.mode is 'train':
+            if self.mode == 'train':
                 image_k = self.transform(image_pil)
         if self.target_transform:
             img_label = self.target_transform(img_label)
-        if self.mode is 'train':
+        if self.mode == 'train':
             return image_q, image_k, img_label
         else:
             return image_q, img_label
