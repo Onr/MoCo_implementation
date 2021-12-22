@@ -23,10 +23,12 @@ class MocoNetEncoder(nn.Module):
                                       pretrained=config['pretrained'])  # todo check if to use pretrain
         self.embedding_size = self.encoder.fc.in_features
         self.encoder.fc = torch.nn.Identity()
+        self.norm = torch.nn.BatchNorm1d(num_features=self.embedding_size)
 
         class MLP_encoder(nn.Module):
             def __init__(self, in_features=2048, out_features=128):
                 super().__init__()
+
                 self.fc1 = torch.nn.Linear(in_features=in_features, out_features=in_features)
                 self.non_lin = nn.ReLU()
                 self.fc2 = torch.nn.Linear(in_features=in_features, out_features=out_features)
@@ -41,14 +43,16 @@ class MocoNetEncoder(nn.Module):
 
     def forward(self, x):
         x = self.encoder(x)
+        x = self.norm(x)
         if self.training:
             x = self.encoder_end(x)
         return x
 
 
 class LinearClassificationNet(LightningModule):
-    def __init__(self, in_features, out_features):
+    def __init__(self, in_features, out_features, lr):
         super().__init__()
+        self.lr = lr
         self.fc = nn.Linear(in_features=in_features, out_features=out_features)
         self.norm = nn.Sigmoid()
         # self.norm = nn.Softmax(dim=1)
@@ -77,7 +81,7 @@ class LinearClassificationNet(LightningModule):
     #     pass
 
     def configure_optimizers(self):
-        return Adam(self.parameters(), lr=1e-3)
+        return Adam(self.parameters(), lr=self.lr)
 
 
 class EmbeddingDataset(Dataset):
@@ -108,7 +112,8 @@ class LitMoCo(LightningModule):
         self.loss_func = torch.nn.CrossEntropyLoss()
         self.cur_dictionary_ind = 0
         # self.linear_trainer = Trainer(max_epochs=10, devices=1)
-        self.linear_net = LinearClassificationNet(in_features=self.encoder.embedding_size, out_features=self.num_of_classes)
+        self.linear_net = LinearClassificationNet(in_features=self.encoder.embedding_size, out_features=self.num_of_classes, lr=self.config['linear_lr'])
+        self.linear_trainer = Trainer(max_epochs=self.config['linear_max_epoch'], gpus=self.config['gpus'])
 
     def forward(self, x):
         x = self.encoder(x)
@@ -126,8 +131,7 @@ class LitMoCo(LightningModule):
         for (name_encoder, W_encoder), (name_encoder_momentum, W_encoder_momentum) in zip(
                 self.encoder.named_parameters(), self.encoder_momentum.named_parameters()):
             if 'weight' in name_encoder:
-                W_encoder_momentum = self.momentum * W_encoder_momentum + (
-                            1 - self.momentum) * W_encoder  # todo check the momentom is on the rigth side
+                W_encoder_momentum = self.momentum * W_encoder_momentum + (1 - self.momentum) * W_encoder  # todo check the momentom is on the rigth side
 
         q = self.forward(x_q)
         k = self.forward_momentum(x_k)
@@ -175,22 +179,30 @@ class LitMoCo(LightningModule):
         label_s = list(itertools.chain.from_iterable([curr[1] for curr in embedding_and_labels]))
         embedding_data = list(zip(embedding_s, label_s))
         embedding_dataset = EmbeddingDataset(embedding_data)
-        embedding_dataloader = DataLoader(embedding_dataset, batch_size=128)
-        self.linear_trainer = Trainer(max_epochs=100, gpus=self.config['gpus'])
+        embedding_dataloader = DataLoader(embedding_dataset, batch_size=self.config['linear_batch_size'])
         self.linear_trainer.fit(model=self.linear_net, train_dataloader=embedding_dataloader)
         test_results = self.linear_trainer.test(model=self.linear_net, test_dataloaders=embedding_dataloader)
         self.log('val_linear-acc', test_results[0]['test-acc'])
 
     def configure_optimizers(self):
-        return Adam(self.parameters(), lr=1e-3)
+        return Adam(self.parameters(), lr=self.config['model_lr'])
 
     def train_dataloader(self):
         # transforms
-        transform = transforms.Compose([transforms.RandomSizedCrop(224),
-                                        transforms.ColorJitter(brightness=0.4, contrast=0.4, saturation=0.4, hue=0.4),
+        transform = transforms.Compose([transforms.RandomSizedCrop(self.config['RandomSizedCrop']),
+                                        transforms.ColorJitter(brightness=self.config['ColorJitter_brightness'],
+                                                               contrast=self.config['ColorJitter_contrast'],
+                                                               saturation=self.config['ColorJitter_saturation'],
+                                                               hue=self.config['ColorJitter_hue']),
                                         transforms.RandomHorizontalFlip(p=0.5),
-                                        transforms.RandomGrayscale(p=0.2),
-                                        transforms.GaussianBlur(kernel_size=(35, 35), sigma=(0.1, 0.2)),  # TODO: check
+                                        transforms.RandomGrayscale(p=self.config['RandomGrayscale']),
+                                        transforms.RandomApply(torch.nn.ModuleList([
+                                            transforms.GaussianBlur(kernel_size=(
+                                                1 + self.config['RandomSizedCrop'] // 10, 1 + self.config['RandomSizedCrop'] // 10),
+                                                                        sigma=(self.config['GaussianBlur_min'],
+                                                                               self.config['GaussianBlur_max'])),
+                                        ]), p=0.5),
+
                                         transforms.ToTensor(),
                                         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
                                         ])

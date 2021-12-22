@@ -11,7 +11,23 @@ temperature: 0.2
 momentum: 0.999
 mlp_out_features: 128
 num_of_classes: 10
-batch_size: 64
+batch_size: 128
 dataset: ./datasets/imagenette2-160
 do_all_dataset_in_memory: True
 check_val_every_n_epoch: 1
+num_workers: 8
+model_lr: 0.015
+
+# linear model
+linear_batch_size: 256
+linear_max_epoch: 100
+linear_lr: 30
+
+RandomSizedCrop: 224
+ColorJitter_brightness: 0.4
+ColorJitter_contrast: 0.4
+ColorJitter_saturation: 0.4
+ColorJitter_hue: 0.4
+GaussianBlur_min: 0.1
+GaussianBlur_max: 2
+RandomGrayscale: 0.2
