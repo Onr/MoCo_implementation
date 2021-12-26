@@ -13,9 +13,7 @@ with open("config.yaml", "r") as stream:
 
 seed_everything(config['seed'], workers=True)
 wandb_logger = WandbLogger(entity='advanced-topics-in-deep-learning')
-
-# net = LitMoCo()
-
+wandb_logger.log_hyperparams(config)
 model = LitMoCo(config=config)
 trainer = Trainer(max_steps=config['max_steps'], gpus=config['gpus'], logger=wandb_logger, check_val_every_n_epoch=config['check_val_every_n_epoch'])
 trainer.fit(model)

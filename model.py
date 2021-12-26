@@ -14,6 +14,7 @@ from PIL import Image
 from torchvision.models.resnet import resnet18 as _resnet18
 from tqdm import tqdm
 import itertools
+from torch.optim.lr_scheduler import CosineAnnealingLR
 
 
 class MocoNetEncoder(nn.Module):
@@ -23,7 +24,6 @@ class MocoNetEncoder(nn.Module):
                                       pretrained=config['pretrained'])  # todo check if to use pretrain
         self.embedding_size = self.encoder.fc.in_features
         self.encoder.fc = torch.nn.Identity()
-        self.norm = torch.nn.BatchNorm1d(num_features=self.embedding_size)
 
         class MLP_encoder(nn.Module):
             def __init__(self, in_features=2048, out_features=128):
@@ -43,7 +43,6 @@ class MocoNetEncoder(nn.Module):
 
     def forward(self, x):
         x = self.encoder(x)
-        x = self.norm(x)
         if self.training:
             x = self.encoder_end(x)
         return x
@@ -81,7 +80,8 @@ class LinearClassificationNet(LightningModule):
     #     pass
 
     def configure_optimizers(self):
-        return Adam(self.parameters(), lr=self.lr)
+        adam_opt = Adam(self.parameters(), lr=self.lr)
+        return adam_opt
 
 
 class EmbeddingDataset(Dataset):
@@ -134,7 +134,9 @@ class LitMoCo(LightningModule):
                 W_encoder_momentum = self.momentum * W_encoder_momentum + (1 - self.momentum) * W_encoder  # todo check the momentom is on the rigth side
 
         q = self.forward(x_q)
+        q = nn.functional.normalize(q, dim=1)
         k = self.forward_momentum(x_k)
+        k = nn.functional.normalize(k, dim=1)
         k = k.detach()
 
         # positive logits: Nx1
@@ -185,7 +187,10 @@ class LitMoCo(LightningModule):
         self.log('val_linear-acc', test_results[0]['test-acc'])
 
     def configure_optimizers(self):
-        return Adam(self.parameters(), lr=self.config['model_lr'])
+        adam_optimizer = Adam(self.parameters(), lr=self.config['model_lr'])
+        scheduler = CosineAnnealingLR(optimizer=adam_optimizer, T_max=self.config['max_steps'], eta_min=1e-8)
+        return [adam_optimizer], [scheduler]
+
 
     def train_dataloader(self):
         # transforms
