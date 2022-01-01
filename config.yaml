@@ -1,21 +1,26 @@
+# general config
 entity: 'advanced-topics-in-deep-learning'
 seed: 42
+gpus: 1
+num_workers: 8
+
+# backbone and dataset
 repo_or_dir: pytorch/vision:v0.10.0          # facebookresearch/WSL-Images
 model: resnet50 # wide_resnet50_2 #          # resnext101_32x8d_wsl
 pretrained: True
+dataset: ./datasets/imagenette2 #imagenette2-160
+num_of_classes: 10
+
+# Moco model
+batch_size: 32
 channels: 128
+mlp_out_features: 128
 max_steps: 100_000
-gpus: 1
 queue_size: 16_000
 temperature: 0.2
 momentum: 0.999
-mlp_out_features: 128
-num_of_classes: 10
-batch_size: 32
-dataset: ./datasets/imagenette2
-do_all_dataset_in_memory: True
+do_all_dataset_in_memory: False #True
 check_val_every_n_epoch: 1
-num_workers: 8
 model_lr: 0.01
 
 # linear model
@@ -23,6 +28,7 @@ linear_batch_size: 256
 linear_max_epoch: 100
 linear_lr: 0.015
 
+# augmentations
 RandomSizedCrop: 224
 ColorJitter_brightness: 0.4
 ColorJitter_contrast: 0.4

@@ -7,7 +7,6 @@ from torch.utils.data import DataLoader
 from torchvision import transforms
 from pytorch_lightning import Trainer
 from torch.utils.data import Dataset
-from torchvision.models.resnet import resnet18 as _resnet18
 from tqdm import tqdm
 import itertools
 from torch.optim.lr_scheduler import CosineAnnealingLR
@@ -18,7 +17,7 @@ class MocoNetEncoder(nn.Module):
     def __init__(self, config):
         super().__init__()
         self.encoder = torch.hub.load(repo_or_dir=config['repo_or_dir'], model=config['model'],
-                                      pretrained=config['pretrained'])  # todo check if to use pretrain
+                                      pretrained=config['pretrained'])
         self.embedding_size = self.encoder.fc.in_features
         self.encoder.fc = torch.nn.Identity()
 
@@ -133,8 +132,7 @@ class LitMoCo(LightningModule):
         l_pos = torch.bmm(q.view(N, 1, self.C), k.view(N, self.C, 1)).squeeze(-1)
 
         # negative logits: NxK
-        l_neg = torch.mm(q.view(N, self.C),
-                         self.queue.clone().to(self.device))  # todo check if there is an alternative to clone
+        l_neg = torch.mm(q.view(N, self.C), self.queue.clone().to(self.device))
 
         # logits: Nx(1+K)
         logits = torch.cat([l_pos, l_neg], dim=1)
@@ -195,18 +193,22 @@ class LitMoCo(LightningModule):
                                         transforms.RandomHorizontalFlip(p=0.5),
                                         transforms.RandomGrayscale(p=self.config['RandomGrayscale']),
                                         transforms.RandomApply(torch.nn.ModuleList([
-                                            transforms.GaussianBlur(kernel_size=(
-                                                1 + self.config['RandomSizedCrop'] // 10, 1 + self.config['RandomSizedCrop'] // 10),
-                                                                        sigma=(self.config['GaussianBlur_min'],
-                                                                               self.config['GaussianBlur_max'])),
+                                            transforms.GaussianBlur(
+                                                kernel_size=(
+                                                    1 + self.config['RandomSizedCrop'] // 10,
+                                                    1 + self.config['RandomSizedCrop'] // 10),
+                                                sigma=(
+                                                    self.config['GaussianBlur_min'],
+                                                    self.config['GaussianBlur_max'])),
                                         ]), p=0.5),
-
                                         transforms.ToTensor(),
                                         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
                                         ])
         # data
-        imagenette2_train = Imagenette2_dataset(dir_path=self.config['dataset'], transform=transform,
-                                                mode='train', do_all_dataset_in_memory=self.config['do_all_dataset_in_memory'])
+        imagenette2_train = Imagenette2_dataset(dir_path=self.config['dataset'],
+                                                transform=transform,
+                                                mode='train',
+                                                do_all_dataset_in_memory=self.config['do_all_dataset_in_memory'])
         return DataLoader(imagenette2_train, batch_size=self.config['batch_size'], num_workers=self.config['num_workers'])
 
     def val_dataloader(self):
@@ -216,8 +218,6 @@ class LitMoCo(LightningModule):
                                         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
                                         ])
         # data
-        imagenette2_val = Imagenette2_dataset(dir_path=self.config['dataset'], transform=transform, mode='val', do_all_dataset_in_memory=self.config['do_all_dataset_in_memory'])
+        imagenette2_val = Imagenette2_dataset(dir_path=self.config['dataset'], transform=transform, mode='val',
+                                              do_all_dataset_in_memory=self.config['do_all_dataset_in_memory'])
         return DataLoader(imagenette2_val, batch_size=self.config['batch_size'], num_workers=self.config['num_workers'])
-
-
-
