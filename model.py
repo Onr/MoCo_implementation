@@ -3,18 +3,15 @@ from torch.nn import functional as F
 from torch import nn
 from pytorch_lightning.core.lightning import LightningModule
 from torch.optim import Adam
-from torch.utils.data import DataLoader, random_split
-from torchvision.datasets import MNIST
-import os
-from torchvision import datasets, transforms
+from torch.utils.data import DataLoader
+from torchvision import transforms
 from pytorch_lightning import Trainer
 from torch.utils.data import Dataset
-from torchvision.io import read_image
-from PIL import Image
 from torchvision.models.resnet import resnet18 as _resnet18
 from tqdm import tqdm
 import itertools
 from torch.optim.lr_scheduler import CosineAnnealingLR
+from Imagenette import Imagenette2_dataset
 
 
 class MocoNetEncoder(nn.Module):
@@ -111,7 +108,6 @@ class LitMoCo(LightningModule):
         self.queue = torch.zeros(self.C, self.queue_size, device=self.device)
         self.loss_func = torch.nn.CrossEntropyLoss()
         self.cur_dictionary_ind = 0
-        # self.linear_trainer = Trainer(max_epochs=10, devices=1)
         self.linear_net = LinearClassificationNet(in_features=self.encoder.embedding_size, out_features=self.num_of_classes, lr=self.config['linear_lr'])
         self.linear_trainer = Trainer(max_epochs=self.config['linear_max_epoch'], gpus=self.config['gpus'])
 
@@ -127,16 +123,10 @@ class LitMoCo(LightningModule):
         N = batch[0].shape[0]
         x_q, x_k, y = batch
 
-        # momentum update: key network
-        for (name_encoder, W_encoder), (name_encoder_momentum, W_encoder_momentum) in zip(
-                self.encoder.named_parameters(), self.encoder_momentum.named_parameters()):
-            if 'weight' in name_encoder:
-                W_encoder_momentum = self.momentum * W_encoder_momentum + (1 - self.momentum) * W_encoder  # todo check the momentom is on the rigth side
-
         q = self.forward(x_q)
-        q = nn.functional.normalize(q, dim=1)
+        q = F.normalize(q, dim=1)
         k = self.forward_momentum(x_k)
-        k = nn.functional.normalize(k, dim=1)
+        k = F.normalize(k, dim=1)
         k = k.detach()
 
         # positive logits: Nx1
@@ -152,6 +142,10 @@ class LitMoCo(LightningModule):
         # contrastive loss, Eqn. (1)
         labels = torch.zeros(N, dtype=torch.long, device=self.device)  # positives are the 0-th
         loss = self.loss_func(logits / self.temperature, labels)
+
+        # momentum update: key network
+        for f_q_params, f_k_params in zip(self.encoder.parameters(), self.encoder_momentum.parameters()):
+            f_k_params.data = self.momentum * f_k_params.data + (1 - self.momentum) * f_q_params.data
 
         # update dictionary # todo add ability for queue to not be multiplication of the minibatch
         start_ind = self.cur_dictionary_ind
@@ -191,7 +185,6 @@ class LitMoCo(LightningModule):
         scheduler = CosineAnnealingLR(optimizer=adam_optimizer, T_max=self.config['max_steps'], eta_min=1e-8)
         return [adam_optimizer], [scheduler]
 
-
     def train_dataloader(self):
         # transforms
         transform = transforms.Compose([transforms.RandomSizedCrop(self.config['RandomSizedCrop']),
@@ -227,69 +220,4 @@ class LitMoCo(LightningModule):
         return DataLoader(imagenette2_val, batch_size=self.config['batch_size'], num_workers=self.config['num_workers'])
 
 
-class Imagenette2_dataset(Dataset):
-    def __init__(self, dir_path, mode, transform=None, target_transform=None, do_all_dataset_in_memory=True):
-        self.mode = mode
-        dir_path = os.path.join(dir_path, mode)
-        class_dirs = [os.path.join(dir_path, cur_path) for cur_path in os.listdir(dir_path) if
-                      not cur_path.startswith('.')]
-        self.images_paths = []
-        self.images_labels = []
-        # class_name_to_class_id = {
-        #     'chainsaw': 0,
-        #     'church': 1,
-        #     'dog': 2,
-        #     'fish': 3,
-        #     'gas_station': 4,
-        #     'golf': 5,
-        #     'parachute': 6,
-        #     'radio': 7,
-        #     'truck': 8,
-        #     'trumpet': 9,
-        # }
-        class_names = [class_name for class_name in os.listdir(dir_path)]
 
-        class_name_to_class_id = {}
-        for idx, class_name in enumerate(class_names):
-            class_name_to_class_id[class_name] = idx
-
-        for cur_dir in class_dirs:
-            curr_images_paths = [os.path.join(cur_dir, img_name) for img_name in os.listdir(cur_dir)]
-            curr_images_labels = [cur_dir.split('/')[-1]] * len(curr_images_paths)
-            self.images_paths += curr_images_paths
-            self.images_labels += [class_name_to_class_id[cur_lab] for cur_lab in curr_images_labels]
-
-        self.do_all_dataset_in_memory = do_all_dataset_in_memory
-        if self.do_all_dataset_in_memory:
-            self.imgs = []
-            self.labels = []
-            for img_path, img_label in zip(self.images_paths, self.images_labels):
-                image_pil = Image.open(img_path).convert('RGB')
-                self.imgs += [image_pil]
-                self.labels += [img_label]
-
-
-        self.transform = transform
-        self.target_transform = target_transform
-
-    def __len__(self):
-        return len(self.images_paths)
-
-    def __getitem__(self, idx):
-        if not self.do_all_dataset_in_memory:
-            img_path = self.images_paths[idx]
-            img_label = self.images_labels[idx]
-            image_pil = Image.open(img_path).convert('RGB')
-        else:
-            image_pil = self.imgs[idx]
-            img_label = self.labels[idx]
-        if self.transform:
-            image_q = self.transform(image_pil)
-            if self.mode == 'train':
-                image_k = self.transform(image_pil)
-        if self.target_transform:
-            img_label = self.target_transform(img_label)
-        if self.mode == 'train':
-            return image_q, image_k, img_label
-        else:
-            return image_q, img_label
