@@ -109,6 +109,12 @@ class LitMoCo(LightningModule):
         self.cur_dictionary_ind = 0
         self.linear_net = LinearClassificationNet(in_features=self.encoder.embedding_size, out_features=self.num_of_classes, lr=self.config['linear_lr'])
         self.linear_trainer = Trainer(max_epochs=self.config['linear_max_epoch'], gpus=self.config['gpus'])
+        self.init_params()
+
+    def init_params(self):
+        for f_q_params, f_k_params in zip(self.encoder.parameters(), self.encoder_momentum.parameters()):
+            f_k_params.data.copy_(f_q_params.data)
+            f_k_params.requires_grad = False
 
     def forward(self, x):
         x = self.encoder(x)
@@ -124,9 +130,14 @@ class LitMoCo(LightningModule):
 
         q = self.forward(x_q)
         q = F.normalize(q, dim=1)
-        k = self.forward_momentum(x_k)
-        k = F.normalize(k, dim=1)
-        k = k.detach()
+
+        with torch.no_grad():
+            # momentum update: key network
+            for f_q_params, f_k_params in zip(self.encoder.parameters(), self.encoder_momentum.parameters()):
+                f_k_params.data = self.momentum * f_k_params.data + (1 - self.momentum) * f_q_params.data
+
+            k = self.forward_momentum(x_k)
+            k = F.normalize(k, dim=1)
 
         # positive logits: Nx1
         l_pos = torch.bmm(q.view(N, 1, self.C), k.view(N, self.C, 1)).squeeze(-1)
@@ -140,10 +151,6 @@ class LitMoCo(LightningModule):
         # contrastive loss, Eqn. (1)
         labels = torch.zeros(N, dtype=torch.long, device=self.device)  # positives are the 0-th
         loss = self.loss_func(logits / self.temperature, labels)
-
-        # momentum update: key network
-        for f_q_params, f_k_params in zip(self.encoder.parameters(), self.encoder_momentum.parameters()):
-            f_k_params.data = self.momentum * f_k_params.data + (1 - self.momentum) * f_q_params.data
 
         # update dictionary # todo add ability for queue to not be multiplication of the minibatch
         start_ind = self.cur_dictionary_ind
