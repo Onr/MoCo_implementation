@@ -2,7 +2,7 @@ import torch
 from torch.nn import functional as F
 from torch import nn
 from pytorch_lightning.core.lightning import LightningModule
-from torch.optim import Adam
+from torch.optim import Adam, SGD
 from torch.utils.data import DataLoader
 from torchvision import transforms
 from pytorch_lightning import Trainer
@@ -49,8 +49,8 @@ class LinearClassificationNet(LightningModule):
         super().__init__()
         self.lr = lr
         self.fc = nn.Linear(in_features=in_features, out_features=out_features)
-        self.norm = nn.Sigmoid()
-        # self.norm = nn.Softmax(dim=1)
+        # self.norm = nn.Sigmoid()
+        self.norm = nn.Softmax(dim=1)
 
     def forward(self, x):
         outs = self.fc(x)
@@ -162,6 +162,7 @@ class LitMoCo(LightningModule):
             end_ind = self.queue.shape[1] - 1
             end_len = end_ind - start_ind
             remain_len = k.T.shape[1] - end_len
+            # breakpoint()
             self.queue[:, start_ind: end_ind] = k.T.detach()[:, :end_len]
             self.queue[:, :remain_len] = k.T.detach()[:, end_len:]
 
@@ -189,9 +190,10 @@ class LitMoCo(LightningModule):
         self.log('val_linear-acc', test_results[0]['test-acc'])
 
     def configure_optimizers(self):
-        adam_optimizer = Adam(self.parameters(), lr=self.config['model_lr'])
-        scheduler = CosineAnnealingLR(optimizer=adam_optimizer, T_max=self.config['max_steps'], eta_min=1e-8)
-        return [adam_optimizer], [scheduler]
+        # adam_optimizer = Adam(self.parameters(), lr=self.config['model_lr'])
+        sgd_optimizer = SGD(self.parameters(), lr=self.config['model_lr'], weight_decay=self.config['wegiht_decay'], momentum=self.config['momentum'])
+        scheduler = CosineAnnealingLR(optimizer=sgd_optimizer, T_max=self.config['max_steps'], eta_min=1e-8)
+        return [sgd_optimizer], [scheduler]
 
     def train_dataloader(self):
         # transforms
