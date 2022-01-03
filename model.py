@@ -66,11 +66,12 @@ class LinearClassificationNet(LightningModule):
     def test_step(self, batch, batch_idx):
         preds = self(batch[0])
         labels = batch[-1]
-        loss = nn.CrossEntropyLoss()(preds, labels)
         acc = (preds.argmax(dim=-1) == labels).float().mean()
+        return acc
 
+    def test_epoch_end(self, outputs) -> None:
+        acc = float(torch.tensor(outputs).mean())
         self.log('test-acc', acc)
-        return loss
 
     # def train_dataloader(self):
     #     pass
@@ -174,13 +175,15 @@ class LitMoCo(LightningModule):
         return
 
     def validation_epoch_end(self, outputs):
-        embedding_and_labels = [[self(cur_emb[0].cuda()), cur_emb[1]] for cur_emb in
+        # embedding_and_labels = [[self.forward(cur_emb[0].cuda()), cur_emb[1]] for cur_emb in
+        #                         tqdm(self.val_dataloader(), desc='getting embedings for linear classifier')]
+        embedding_and_labels = [[self.forward_momentum(cur_emb[0].cuda()), cur_emb[1]] for cur_emb in
                                 tqdm(self.val_dataloader(), desc='getting embedings for linear classifier')]
         embedding_s = torch.cat([curr[0] for curr in embedding_and_labels], dim=0)
         label_s = list(itertools.chain.from_iterable([curr[1] for curr in embedding_and_labels]))
         embedding_data = list(zip(embedding_s, label_s))
         embedding_dataset = EmbeddingDataset(embedding_data)
-        embedding_dataloader = DataLoader(embedding_dataset, batch_size=self.config['linear_batch_size'])
+        embedding_dataloader = DataLoader(embedding_dataset, batch_size=self.config['linear_batch_size'], shuffle=True)
         self.linear_trainer.fit(model=self.linear_net, train_dataloader=embedding_dataloader)
         test_results = self.linear_trainer.test(model=self.linear_net, test_dataloaders=embedding_dataloader)
         self.log('val_linear-acc', test_results[0]['test-acc'])
