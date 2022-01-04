@@ -2,7 +2,7 @@ import torch
 from torch.nn import functional as F
 from torch import nn
 from pytorch_lightning.core.lightning import LightningModule
-from torch.optim import Adam, SGD
+from torch.optim import SGD
 from torch.utils.data import DataLoader
 from torchvision import transforms
 from pytorch_lightning import Trainer
@@ -11,6 +11,7 @@ from tqdm import tqdm
 import itertools
 from torch.optim.lr_scheduler import CosineAnnealingLR
 from Imagenette import Imagenette2_dataset
+from linclassifier_model import LinearClassificationNet
 
 
 class MocoNetEncoder(nn.Module):
@@ -44,43 +45,6 @@ class MocoNetEncoder(nn.Module):
         return x
 
 
-class LinearClassificationNet(LightningModule):
-    def __init__(self, in_features, out_features, lr):
-        super().__init__()
-        self.lr = lr
-        self.fc = nn.Linear(in_features=in_features, out_features=out_features)
-        # self.norm = nn.Sigmoid()
-        self.norm = nn.Softmax(dim=1)
-
-    def forward(self, x):
-        outs = self.fc(x)
-        preds = self.norm(outs)
-        return preds
-
-    def training_step(self, batch, batch_idx):
-        preds = self(batch[0])
-        labels = batch[-1]
-        loss = nn.CrossEntropyLoss()(preds, labels)
-        return loss
-
-    def test_step(self, batch, batch_idx):
-        preds = self(batch[0])
-        labels = batch[-1]
-        acc = (preds.argmax(dim=-1) == labels).float().mean()
-        return acc
-
-    def test_epoch_end(self, outputs) -> None:
-        acc = float(torch.tensor(outputs).mean())
-        self.log('test-acc', acc)
-
-    # def train_dataloader(self):
-    #     pass
-
-    def configure_optimizers(self):
-        adam_opt = Adam(self.parameters(), lr=self.lr)
-        return adam_opt
-
-
 class EmbeddingDataset(Dataset):
     def __init__(self, data):
         super().__init__()
@@ -108,7 +72,9 @@ class LitMoCo(LightningModule):
         self.queue = torch.zeros(self.C, self.queue_size, device=self.device)
         self.loss_func = torch.nn.CrossEntropyLoss()
         self.cur_dictionary_ind = 0
-        self.linear_net = LinearClassificationNet(in_features=self.encoder.embedding_size, out_features=self.num_of_classes, lr=self.config['linear_lr'])
+        self.linear_net = LinearClassificationNet(in_features=self.encoder.embedding_size,
+                                                  out_features=self.num_of_classes,
+                                                  cfg=self.config)
         self.linear_trainer = Trainer(max_epochs=self.config['linear_max_epoch'], gpus=self.config['gpus'])
         self.init_params()
 
@@ -190,9 +156,13 @@ class LitMoCo(LightningModule):
         self.log('val_linear-acc', test_results[0]['test-acc'])
 
     def configure_optimizers(self):
-        # adam_optimizer = Adam(self.parameters(), lr=self.config['model_lr'])
-        sgd_optimizer = SGD(self.parameters(), lr=self.config['model_lr'], weight_decay=self.config['wegiht_decay'], momentum=self.config['momentum'])
-        scheduler = CosineAnnealingLR(optimizer=sgd_optimizer, T_max=self.config['max_steps'], eta_min=1e-8)
+        sgd_optimizer = SGD(self.parameters(),
+                            lr=self.config['model_lr'],
+                            weight_decay=self.config['moco_sgd_wegiht_decay'],
+                            momentum=self.config['moco_sgd_momentum'])
+        scheduler = CosineAnnealingLR(optimizer=sgd_optimizer,
+                                      T_max=self.config['max_steps'],
+                                      eta_min=1e-8)
         return [sgd_optimizer], [scheduler]
 
     def train_dataloader(self):
