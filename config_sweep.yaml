@@ -1,0 +1,85 @@
+program: main.py
+method: grid
+name: knn_test_0
+description: multiple run
+project: normalized_knn_test
+entity: 'advanced-topics-in-deep-learning'
+metric:
+  name: test-acc
+  goal: maximize
+
+parameters:
+  #  general config
+  seed:
+    values: [42]
+  gpus:
+    values: [1]
+  num_workers:
+    values: [8]
+  # backbone and dataset
+  repo_or_dir:
+    values: [pytorch/vision:v0.10.0]          # facebookresearch/WSL-Images
+  model:
+    values: [resnet50] # wide_resnet50_2 #          # resnext101_32x8d_wsl
+  pretrained:
+    values: [True, False]
+  dataset:
+    values: [./datasets/imagenette2, ./datasets/imagenette2-160] #imagenette2-160
+  num_of_classes:
+    values: [10]
+
+  # Moco model
+  batch_size:
+    values: [32] # 500] #  [1320]
+  channels:
+    values: [12, 13]
+  mlp_out_features:
+    values: [128]
+  max_steps:
+    values: [100_000]
+  queue_size:
+    values: [100_000]
+  temperature:
+    values: [0.2]
+  momentum:
+    values: [0.999]
+  moco_sgd_momentum:
+    values: [0.9]
+  do_all_dataset_in_memory:
+    values: [False] #True
+  check_val_every_n_epoch:
+    values: [1]
+  model_lr:
+    values: [0.01, 0.001]
+  moco_sgd_wegiht_decay:
+    values: [0.0001]
+
+  # linear model
+  linear_batch_size:
+    values: [256]
+  linear_max_epoch:
+    values: [100]
+  linear_lr:  #0.15
+    values: [30]
+  linear_sgd_momentum:
+    values: [0.9]
+  linear_sgd_weight_decay:
+    values: [0]
+
+  # augmentations
+  RandomSizedCrop:
+    values: [224]
+  ColorJitter_brightness:
+    values: [0.4]
+  ColorJitter_contrast:
+    values: [0.4]
+  ColorJitter_saturation:
+    values: [0.4]
+  ColorJitter_hue:
+    values: [0.4]
+  GaussianBlur_min:
+    values: [0.1]
+  GaussianBlur_max:
+    values: [2]
+  RandomGrayscale:
+    values: [0.2]

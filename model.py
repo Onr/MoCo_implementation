@@ -2,17 +2,16 @@ import torch
 from torch.nn import functional as F
 from torch import nn
 from pytorch_lightning.core.lightning import LightningModule
-from torch.optim import SGD
+from torch.optim import Adam, SGD
 from torch.utils.data import DataLoader
 from torchvision import transforms
 from pytorch_lightning import Trainer
 from torch.utils.data import Dataset
 from tqdm import tqdm
 import itertools
-from torch.optim.lr_scheduler import CosineAnnealingLR
+from torch.optim.lr_scheduler import CosineAnnealingLR, StepLR
 from Imagenette import Imagenette2_dataset
 from linclassifier_model import LinearClassificationNet
-
 
 class MocoNetEncoder(nn.Module):
     def __init__(self, config):
@@ -59,8 +58,12 @@ class EmbeddingDataset(Dataset):
 
 
 class LitMoCo(LightningModule):
-    def __init__(self, config):
+    def __init__(self, config, wandb_logger=None, log_func=None):
         super().__init__()
+        if wandb_logger is not None:
+            self.wandb_logger = wandb_logger
+        if log_func is not None:
+            self.log = log_func
         self.config = config
         self.num_of_classes = config['num_of_classes']
         self.C = config['channels']
@@ -141,7 +144,7 @@ class LitMoCo(LightningModule):
         # todo maybe move get embedding to here
         return
 
-    def validation_epoch_end(self, outputs):
+    def validation_epoch_end(self, outputs, log_val_name='val_linear-acc'):
         # embedding_and_labels = [[self.forward(cur_emb[0].cuda()), cur_emb[1]] for cur_emb in
         #                         tqdm(self.val_dataloader(), desc='getting embedings for linear classifier')]
         embedding_and_labels = [[self.forward_momentum(cur_emb[0].cuda()), cur_emb[1]] for cur_emb in
@@ -153,7 +156,12 @@ class LitMoCo(LightningModule):
         embedding_dataloader = DataLoader(embedding_dataset, batch_size=self.config['linear_batch_size'], shuffle=True)
         self.linear_trainer.fit(model=self.linear_net, train_dataloader=embedding_dataloader)
         test_results = self.linear_trainer.test(model=self.linear_net, test_dataloaders=embedding_dataloader)
-        self.log('val_linear-acc', test_results[0]['test-acc'])
+        self.log(name=log_val_name, value=test_results[0]['test-acc'])
+
+    def test_step(self, batch, batch_idx):
+        self.validation_step()
+    def test_epoch_end(self, outputs):
+        self.validation_epoch_end(outputs=outputs, log_val_name='test-acc')
 
     def configure_optimizers(self):
         sgd_optimizer = SGD(self.parameters(),
@@ -163,6 +171,8 @@ class LitMoCo(LightningModule):
         scheduler = CosineAnnealingLR(optimizer=sgd_optimizer,
                                       T_max=self.config['max_steps'],
                                       eta_min=1e-8)
+
+        # scheduler = StepLR(optimizer=sgd_optimizer, step_size=self.config['max_steps'] // 4, gamma=0.75)
         return [sgd_optimizer], [scheduler]
 
     def train_dataloader(self):
@@ -203,3 +213,6 @@ class LitMoCo(LightningModule):
         imagenette2_val = Imagenette2_dataset(dir_path=self.config['dataset'], transform=transform, mode='val',
                                               do_all_dataset_in_memory=self.config['do_all_dataset_in_memory'])
         return DataLoader(imagenette2_val, batch_size=self.config['batch_size'], num_workers=self.config['num_workers'])
+
+    def test_dataloader(self):
+        return self.val_dataloader()
