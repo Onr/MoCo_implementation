@@ -37,7 +37,7 @@ RandomSizedCrop: 224
 ColorJitter_brightness: 0.4
 ColorJitter_contrast: 0.4
 ColorJitter_saturation: 0.4
-ColorJitter_hue: 0.4
+ColorJitter_hue: 0.1 #0.4
 GaussianBlur_min: 0.1
 GaussianBlur_max: 2
 RandomGrayscale: 0.2

@@ -177,11 +177,15 @@ class LitMoCo(LightningModule):
 
     def train_dataloader(self):
         # transforms
-        transform = transforms.Compose([transforms.RandomSizedCrop(self.config['RandomSizedCrop']),
-                                        transforms.ColorJitter(brightness=self.config['ColorJitter_brightness'],
-                                                               contrast=self.config['ColorJitter_contrast'],
-                                                               saturation=self.config['ColorJitter_saturation'],
-                                                               hue=self.config['ColorJitter_hue']),
+        transform = transforms.Compose([transforms.RandomResizedCrop(self.config['RandomSizedCrop'],
+                                                                     scale=(0.2, 1.)),
+                                        transforms.RandomApply(torch.nn.ModuleList([
+                                            transforms.ColorJitter(
+                                                brightness=self.config['ColorJitter_brightness'],
+                                                contrast=self.config['ColorJitter_contrast'],
+                                                saturation=self.config['ColorJitter_saturation'],
+                                                hue=self.config['ColorJitter_hue'])
+                                            ]), p=0.8),
                                         transforms.RandomHorizontalFlip(p=0.5),
                                         transforms.RandomGrayscale(p=self.config['RandomGrayscale']),
                                         transforms.RandomApply(torch.nn.ModuleList([
