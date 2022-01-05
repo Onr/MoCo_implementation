@@ -32,8 +32,8 @@ def main(config: Optional[Dict] = None, wandb_logger = None):
         save_top_k=3,
         mode="max",
     )
-    model = LitMoCo(config=config, wandb_logger=wandb_logger, log_func=log_func)
-    trainer = Trainer(max_steps=config['max_steps'], gpus=config['gpus'], check_val_every_n_epoch=config['check_val_every_n_epoch'], callbacks=[checkpoint_callback])
+    model = LitMoCo(config=config, wandb_logger=None, log_func=log_func)
+    trainer = Trainer(max_steps=config['max_steps'], gpus=config['gpus'], logger=wandb_logger, check_val_every_n_epoch=config['check_val_every_n_epoch'], callbacks=[checkpoint_callback])
     trainer.fit(model)
     trainer.test(model)
 
