@@ -26,7 +26,6 @@ def main(config: Optional[Dict] = None, wandb_logger = None):
         def log_func(name, value):
             wandb_logger.log({name: value})
 
-    main.start_time = str(datetime.datetime.now()).split('.')[0].replace(':', '_').replace(' ', '_')
     ckpt_dir_path = os.path.join('./saved_ckpt/', str(datetime.datetime.now()).split('.')[0].replace(':', '_').replace(' ', '_'))
     checkpoint_callback = ModelCheckpoint(
         monitor="val_linear-acc",
