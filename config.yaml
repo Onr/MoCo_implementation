@@ -15,14 +15,14 @@ num_of_classes: 10
 batch_size: 32
 channels: 128
 mlp_out_features: 128
-max_steps: 100_000
-queue_size: 16_000
+max_epochs: 400 #  100_000
+queue_size: 16_384
 temperature: 0.2
 momentum: 0.999
 moco_sgd_momentum: 0.9
 do_all_dataset_in_memory: False #True
 check_val_every_n_epoch: 1
-model_lr: 0.01
+model_lr: 0.03
 moco_sgd_wegiht_decay: 0.0001
 
 # linear model

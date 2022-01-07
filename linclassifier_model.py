@@ -11,6 +11,8 @@ class LinearClassificationNet(LightningModule):
         self.lr = self.config['linear_lr']
         self.fc = nn.Linear(in_features=in_features, out_features=out_features)
         self.norm = nn.Softmax(dim=1)
+        self.wandb_logger = None
+        self.step = 0
 
     def forward(self, x):
         outs = self.fc(x)
@@ -21,6 +23,10 @@ class LinearClassificationNet(LightningModule):
         preds = self(batch[0])
         labels = batch[-1]
         loss = nn.CrossEntropyLoss()(preds, labels)
+        if self.wandb_logger is not None:
+            self.wandb_logger.experiment.log({'linclassifier_loss': float(loss), 'lin_step': self.step})
+            self.step += 1
+            print(f'{ self.step =}')
         return loss
 
     def test_step(self, batch, batch_idx):
