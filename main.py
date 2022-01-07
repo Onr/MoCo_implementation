@@ -6,7 +6,8 @@ from pytorch_lightning.loggers import WandbLogger
 import yaml
 from typing import Dict, Optional
 from pytorch_lightning.callbacks import ModelCheckpoint
-
+import os
+import datetime
 
 def main(config: Optional[Dict] = None, wandb_logger = None):
     if config is None:
@@ -25,9 +26,11 @@ def main(config: Optional[Dict] = None, wandb_logger = None):
         def log_func(name, value):
             wandb_logger.log({name: value})
 
+    main.start_time = str(datetime.datetime.now()).split('.')[0].replace(':', '_').replace(' ', '_')
+    ckpt_dir_path = os.path.join('./saved_ckpt/', str(datetime.datetime.now()).split('.')[0].replace(':', '_').replace(' ', '_'))
     checkpoint_callback = ModelCheckpoint(
         monitor="val_linear-acc",
-        dirpath="./saved_ckpt/",
+        dirpath=ckpt_dir_path,
         filename="moco-{epoch:02d}-{val_linear-acc:.2f}",
         save_top_k=3,
         mode="max",
