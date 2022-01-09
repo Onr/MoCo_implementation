@@ -29,6 +29,18 @@ class LinearClassificationNet(LightningModule):
             print(f'{ self.step =}')
         return loss
 
+    def validation_step(self, batch, batch_idx):
+        preds = self(batch[0])
+        labels = batch[-1]
+        acc = (preds.argmax(dim=-1) == labels).float().mean()
+        return acc
+
+    def validation_epoch_end(self, outputs, log_val_name='val_linear-acc', wandb_logger=None):
+        acc = float(torch.tensor(outputs).mean())
+        if self.wandb_logger is not None:
+            self.wandb_logger.experiment.log({'linclassifier_acc': float(acc), 'lin_step': self.step})
+        self.log('val-acc', acc)
+
     def test_step(self, batch, batch_idx):
         preds = self(batch[0])
         labels = batch[-1]

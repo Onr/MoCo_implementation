@@ -155,8 +155,9 @@ class LitMoCo(LightningModule):
                                                   out_features=self.num_of_classes,
                                                   cfg=self.config)
         self.linear_net.wandb_logger = wandb_logger
-        self.linear_trainer = Trainer(max_epochs=self.config['linear_max_epoch'], gpus=self.config['gpus'])
-        self.linear_trainer.fit(model=self.linear_net, train_dataloader=embedding_dataloader)
+        limit_val_batches = 0 if wandb_logger is None else 1
+        self.linear_trainer = Trainer(max_epochs=self.config['linear_max_epoch'], gpus=self.config['gpus'], limit_val_batches=limit_val_batches)
+        self.linear_trainer.fit(model=self.linear_net, train_dataloader=embedding_dataloader, val_dataloaders=embedding_dataloader)
         test_results = self.linear_trainer.test(model=self.linear_net, test_dataloaders=embedding_dataloader)
         self.log(name=log_val_name, value=test_results[0]['test-acc'])
 
