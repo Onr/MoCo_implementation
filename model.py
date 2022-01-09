@@ -75,6 +75,9 @@ class LitMoCo(LightningModule):
         self.queue = torch.zeros(self.C, self.queue_size, device=self.device)
         self.loss_func = torch.nn.CrossEntropyLoss()
         self.cur_dictionary_ind = 0
+        self.linear_net = LinearClassificationNet(in_features=self.encoder.embedding_size,
+                                                  out_features=self.num_of_classes,
+                                                  cfg=self.config)
 
         self.init_params()
 

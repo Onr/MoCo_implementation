@@ -8,8 +8,9 @@ from typing import Dict, Optional
 from pytorch_lightning.callbacks import ModelCheckpoint
 import os
 import datetime
+import argparse
 
-def main(config: Optional[Dict] = None, wandb_logger = None):
+def main(config: Optional[Dict] = None, wandb_logger = None, pre_trained=None):
     if config is None:
         with open("config.yaml", "r") as stream:
             try:
@@ -35,9 +36,17 @@ def main(config: Optional[Dict] = None, wandb_logger = None):
         mode="max",
     )
     model = LitMoCo(config=config, wandb_logger=None, log_func=log_func)
-    trainer = Trainer(max_epochs=config['max_epochs'], gpus=config['gpus'], logger=wandb_logger, check_val_every_n_epoch=config['check_val_every_n_epoch'], callbacks=[checkpoint_callback], devices=config['gpus'], accelerator='auto')
-    trainer.fit(model)
+    trainer = Trainer(max_epochs=config['max_epochs'], gpus=config['gpus'], logger=wandb_logger,
+                      check_val_every_n_epoch=config['check_val_every_n_epoch'], callbacks=[checkpoint_callback],
+                      devices=config['gpus'], accelerator='auto')
+    if pre_trained is None:
+        trainer.fit(model)
+    else:
+        model = model.load_from_checkpoint(checkpoint_path=pre_trained, config=config)
     trainer.test(model)
 
 if __name__ == '__main__':
-    main()
+    parser = argparse.ArgumentParser(description='rcompare.')
+    parser.add_argument('--pre_trained', type=str, default=None, help='location of the pre-trained net.')
+    args = parser.parse_args()
+    main(pre_trained=args.pre_trained)
