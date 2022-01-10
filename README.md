@@ -42,10 +42,22 @@ Download the dataset [Imagenette](https://github.com/fastai/imagenette) and orga
 </tr>
 </tbody></table>
 
-### Loss and Top-1 accuracy
-```diff
-- Need to change add the wandb graphs here.
-```
+### Loss and Top-1 accuracy MoCo
+
+#### Moco Loss
+![MoCo_loss](/images/moco_loss.svg)
+
+#### MoCo Accuracy
+![MoCo_acc](/images/moco_acc.svg)
+
+### Loss and Top-1 accuracy Linear model (On last MoCo Model) 
+
+#### Linear Loss
+![Lin_loss](/images/lin_loss.svg)
+
+#### Linear Accuracy
+![Lin_acc](/images/lin_acc.svg)
+
 
 ## Disclaimer
 - This code does not support batch shuffle as in the original paper.
