@@ -38,7 +38,7 @@ Download the dataset [Imagenette](https://github.com/fastai/imagenette) and orga
 <tr><td align="left">MoCo v2 best</td>
 <td align="center">143</td>
 <td align="center">0.945</td>
-<td align="center"><a href="https://1drv.ms/u/s!AtvUxcft_YQ-g-kUXSn_CX7o_nn5Yw?e=54u59f">download</a></td>
+<td align="center"><a href="https://technionmail-my.sharepoint.com/:u:/r/personal/shrout_oren_campus_technion_ac_il/Documents/236605/MoCo_v2/moco-epoch=143-val_linear-acc=0.95.ckpt?csf=1&web=1&e=gZWkJd">download</a></td>
 </tr>
 </tbody></table>
 
