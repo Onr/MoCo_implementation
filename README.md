@@ -32,9 +32,14 @@ And organize it as follows:
 bash scripts/download.sh moco
 ```
 
-#) Run
+3) Run Test
 ```
 ./main.py --pre_trained ./saved_ckpt/
+```
+
+Or train from scratch 
+```
+./main.py
 ```
 
 ## Results
