@@ -6,9 +6,16 @@ To install the requirements run:
 ```
 pip install -r requirements.txt
 ```
+### Download
+1) Download the dataset
+```
+bash scripts/download.sh imagenette2
+```
+Or Download from:
 
-Download the dataset [Imagenette](https://github.com/fastai/imagenette) and organize it as follows:
+[Imagenette](https://github.com/fastai/imagenette)
 
+And organize it as follows:
 ```
   MoCo_implementation
   ├── datasets
@@ -19,6 +26,15 @@ Download the dataset [Imagenette](https://github.com/fastai/imagenette) and orga
   ├── linclassifier_model.py
   ├── model.py
   ├── config.yaml
+```
+2) Download our pre-trained model
+```
+bash scripts/download.sh moco
+```
+
+#) Run
+```
+./main.py --pre_trained ./saved_ckpt/
 ```
 
 ## Results
