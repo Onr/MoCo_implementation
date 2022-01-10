@@ -34,14 +34,10 @@ Download the dataset [Imagenette](https://github.com/fastai/imagenette) and orga
 <th valign="bottom">top-1 accuracy</th>
 <th valign="bottom">checkpoint</th>
 <!-- TABLE BODY -->
-<tr><td align="left">MoCo v2 model</td>
-<td align="center">400</td>
-<td align="center">XXXX</td>
-<td align="center"><a href="https://1drv.ms/u/s!AtvUxcft_YQ-g-kV29FAUS-f8hWecg?e=OQtPKa">download</a></td>
-</tr>
-<tr><td align="left">Linear Classifier</td>
-<td align="center">100</td>
-<td align="center">XXXX</td>
+
+<tr><td align="left">MoCo v2 best</td>
+<td align="center">143</td>
+<td align="center">0.945</td>
 <td align="center"><a href="https://1drv.ms/u/s!AtvUxcft_YQ-g-kUXSn_CX7o_nn5Yw?e=54u59f">download</a></td>
 </tr>
 </tbody></table>
