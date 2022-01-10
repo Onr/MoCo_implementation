@@ -11,11 +11,7 @@ pip install -r requirements.txt
 ```
 bash scripts/download.sh imagenette2
 ```
-Or Download from:
-
-[Imagenette](https://github.com/fastai/imagenette)
-
-And organize it as follows:
+Or Download from: [Imagenette](https://github.com/fastai/imagenette) and organize it as follows:
 ```
   MoCo_implementation
   ├── datasets
@@ -37,7 +33,7 @@ bash scripts/download.sh moco
 ./main.py --pre_trained ./saved_ckpt/
 ```
 
-Or train from scratch 
+4) Or train from scratch 
 ```
 ./main.py
 ```
