@@ -30,7 +30,7 @@ bash scripts/download.sh moco
 
 3) Run Test
 ```
-./main.py --pre_trained ./saved_ckpt/
+python ./main.py --pre_trained ./saved_ckpt/moco.ckpt
 ```
 
 4) Or train from scratch 

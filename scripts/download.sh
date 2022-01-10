@@ -2,19 +2,17 @@
 FILE=$1
 
 if [ $FILE == "moco" ]; then
-    URL=https://1drv.ms/u/s!AtvUxcft_YQ-g-kV29FAUS-f8hWecg?e=OQtPKa
-    ZIP_FILE=./saved_ckpt/moco400.zip
+    URL="https://onedrive.live.com/download?cid=F025222A8799E567&resid=F025222A8799E567%21106&authkey=AKfcQ-VpY8HMUBQ"
+    ZIP_FILE=./saved_ckpt/moco.ckpt
     mkdir -p ./saved_ckpt/
-    wget -N $URL -O $ZIP_FILE
-    unzip $ZIP_FILE -d ./saved_ckpt/
-    rm $ZIP_FILE
+    wget --no-check-certificate -N $URL -O $ZIP_FILE
 
- elif [ $FILE == "imagenette2" ]; then
-    URL=https://s3.amazonaws.com/fast-ai-imageclas/imagenette2.tgz
-    ZIP_FILE=./saved_ckpt/imagenette2.zip
+ elif [ $FILE == "imagenette2-320" ]; then
+    URL=https://s3.amazonaws.com/fast-ai-imageclas/imagenette2-320.tgz
+    ZIP_FILE=./saved_ckpt/imagenette2-320.tgz
     mkdir -p ./datasets/
     wget -N $URL -O $ZIP_FILE
-    unzip $ZIP_FILE -d ./datasets/
+    tar zxvf $ZIP_FILE -C ./datasets/
     rm $ZIP_FILE
 
 
