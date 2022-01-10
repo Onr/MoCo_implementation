@@ -38,9 +38,6 @@ bash scripts/download.sh moco
 ```
 
 ## Results
-```diff
-- Need to change XXXX in the table below with the actual results.
-```
 
 <table><tbody>
 <!-- START TABLE -->
