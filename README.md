@@ -1,2 +1,79 @@
-# MoCo_implementation
-MoCo implementation for the course Advance topics in deep learning
+# MoCo v2 implementation for the course Advance topics in Deep Learning (cs236605)
+This repo is a Pytorch implementation of [MoCo paper](https://arxiv.org/abs/1911.05722) along with the modifications of [MoCo v2 paper](https://arxiv.org/abs/2003.04297).
+
+## Setup
+To install the requirements run:
+```
+pip install -r requirements.txt
+```
+
+Download the dataset [Imagenette](https://github.com/fastai/imagenette) and organize it as follows:
+
+```
+  MoCo_implementation
+  ├── datasets
+  │   ├── imagenette2
+  ├── saved_ckpt
+  ├── main.py
+  ├── Imagenette.py
+  ├── linclassifier_model.py
+  ├── model.py
+  ├── config.yaml
+```
+
+## Results
+```diff
+- Need to change XXXX in the table below with the actual results.
+```
+
+<table><tbody>
+<!-- START TABLE -->
+<!-- TABLE HEADER -->
+<th valign="bottom"></th>
+<th valign="bottom">epochs</th>
+<th valign="bottom">top-1 accuracy</th>
+<th valign="bottom">checkpoint</th>
+<!-- TABLE BODY -->
+<tr><td align="left">MoCo v2 model</td>
+<td align="center">400</td>
+<td align="center">XXXX</td>
+<td align="center"><a href="https://1drv.ms/u/s!AtvUxcft_YQ-g-kV29FAUS-f8hWecg?e=OQtPKa">download</a></td>
+</tr>
+<tr><td align="left">Linear Classifier</td>
+<td align="center">100</td>
+<td align="center">XXXX</td>
+<td align="center"><a href="https://1drv.ms/u/s!AtvUxcft_YQ-g-kUXSn_CX7o_nn5Yw?e=54u59f">download</a></td>
+</tr>
+</tbody></table>
+
+### Loss and Top-1 accuracy
+```diff
+- Need to change add the wandb graphs here.
+```
+
+## Disclaimer
+- This code does not support batch shuffle as in the original paper.
+- The code was tested on 3 different Nvidia GPU's: 
+  - GeForce RTX 2080 Ti.
+  - RTX A5000.
+  - Tesla V100.
+
+
+## References
+```
+@Article{he2019moco,
+  author  = {Kaiming He and Haoqi Fan and Yuxin Wu and Saining Xie and Ross Girshick},
+  title   = {Momentum Contrast for Unsupervised Visual Representation Learning},
+  journal = {arXiv preprint arXiv:1911.05722},
+  year    = {2019},
+}
+```
+```
+@Article{chen2020mocov2,
+  author  = {Xinlei Chen and Haoqi Fan and Ross Girshick and Kaiming He},
+  title   = {Improved Baselines with Momentum Contrastive Learning},
+  journal = {arXiv preprint arXiv:2003.04297},
+  year    = {2020},
+}
+```
+
